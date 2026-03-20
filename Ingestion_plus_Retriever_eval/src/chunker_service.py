@@ -39,7 +39,7 @@ class ChunkerService:
         """
         self.documents = document_repository.get_documents()
         self.splitter_strategy = splitter_strategy
-        self.logger = logging.getLogger("DocumentIngestion")
+        self.logger = logging.getLogger(__name__)
         self.logger.info(f"ChunkerService initialized with {len(self.documents)} documents")
 
     def chunk_documents(self) -> List[Document]:

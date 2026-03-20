@@ -36,7 +36,7 @@ class Pipeline:
         """
         self.chunker_service = chunker_service
         self.document_repository = document_repository
-        self.logger = logging.getLogger("DocumentIngestion")
+        self.logger = logging.getLogger(__name__)
         self.logger.debug("Pipeline initialized with chunker_service and document_repository")
 
     def run(self):

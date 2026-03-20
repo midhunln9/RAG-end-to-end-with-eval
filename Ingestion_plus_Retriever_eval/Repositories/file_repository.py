@@ -23,7 +23,7 @@ class FileRepository(DocumentRepositoryProtocol):
         logger (logging.Logger): Logger instance for repository operations.
     """
 
-    def __init__(self, file_location: str = "Ingestion_plus_Retriever_eval/Documents"):
+    def __init__(self, file_location: str = "/Users/midhunln/Documents/rag20march_with_eval/Ingestion_plus_Retriever_eval/Documents"):
         """
         Initialize the FileRepository with a document location.
 
@@ -32,7 +32,7 @@ class FileRepository(DocumentRepositoryProtocol):
                 Defaults to "Ingestion_plus_Retriever_eval/Documents".
         """
         self.file_location = file_location
-        self.logger = logging.getLogger("DocumentIngestion")
+        self.logger = logging.getLogger(__name__)
         self.logger.info(f"FileRepository initialized with location: {file_location}")
 
     def get_documents(self) -> List[str]:

@@ -42,7 +42,7 @@ class RecursiveCharacterTextSplitting(SplitterStrategy):
         """
         self.config = config
         self.splitter = splitter
-        self.logger = logging.getLogger("DocumentIngestion")
+        self.logger = logging.getLogger(__name__)
         self.logger.debug(
             f"RecursiveCharacterTextSplitting initialized with "
             f"chunk_size={config.chunk_size}, chunk_overlap={config.chunk_overlap}"
