@@ -9,6 +9,7 @@ document repository.
 import logging
 from Protocols.document_repository_protocol import DocumentRepositoryProtocol
 from src.chunker_service import ChunkerService
+from src.upsert_service import UpsertService
 
 
 class Pipeline:
@@ -26,7 +27,8 @@ class Pipeline:
 
     def __init__(self,
                  chunker_service: ChunkerService,
-                 document_repository: DocumentRepositoryProtocol):
+                 document_repository: DocumentRepositoryProtocol,
+                 upsert_service: UpsertService):
         """
         Initialize the Pipeline with required services.
 
@@ -35,6 +37,7 @@ class Pipeline:
             document_repository (DocumentRepositoryProtocol): Repository for accessing documents.
         """
         self.chunker_service = chunker_service
+        self.upsert_service = upsert_service
         self.document_repository = document_repository
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Pipeline initialized with chunker_service and document_repository")
@@ -51,5 +54,6 @@ class Pipeline:
         """
         self.logger.info("Starting pipeline execution")
         chunks = self.chunker_service.chunk_documents()
-        self.logger.info(f"Pipeline execution completed. Generated {len(chunks)} chunks")
+        self.upsert_service.upsert_chunks(chunks)
+        self.logger.info(f"Pipeline execution completed. Generated {len(chunks)} chunks and upserted them into the vector database")
         return chunks
