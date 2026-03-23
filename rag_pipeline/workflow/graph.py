@@ -56,9 +56,9 @@ class RAGWorkflow:
 
         return graph.compile()
 
-    def run(self, query: str, session_id: str) -> dict:
+    def execute(self, query: str, session_id: str) -> dict:
         """
-        Execute the RAG workflow.
+        Execute the RAG workflow with the given query and session.
         
         Args:
             query: User query.

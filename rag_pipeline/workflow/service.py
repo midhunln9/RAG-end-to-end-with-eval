@@ -1,8 +1,8 @@
 """
-RAG (Retrieval-Augmented Generation) service layer.
+RAG (Retrieval-Augmented Generation) utility service.
 
-Orchestrates the complete RAG workflow including query rewriting, document retrieval,
-context summarization, and response generation.
+Provides utility methods for individual workflow nodes to call.
+Does not orchestrate - nodes handle the workflow coordination.
 """
 
 import logging
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 class RAGService:
     """
-    Orchestrates the complete RAG pipeline.
+    Utility service providing helper methods for RAG workflow nodes.
     
-    Handles query rewriting, document retrieval, conversation context,
-    and response generation.
+    Each method performs a specific task that individual nodes call.
+    Does NOT orchestrate the workflow - nodes coordinate the flow.
     """
 
     def __init__(
@@ -40,40 +40,33 @@ class RAGService:
         llm: LLMProtocol,
     ):
         """
-        Initialize RAG service with required dependencies.
+        Initialize service with required dependencies.
         
         Args:
             database: Database connection manager.
             vector_db: Vector store for document retrieval.
-            conversation_repository: Repository for storing conversation history.
-            llm: Language model for query rewriting and response generation.
+            conversation_repository: Repository for conversation history.
+            llm: Language model for rewriting and generation.
         """
         self.database = database
         self.vector_db = vector_db
         self.conversation_repository = conversation_repository
         self.llm = llm
 
-    def rewrite_query(self, query: str) -> tuple[str, list[BaseMessage]]:
+    def rewrite_query(self, query: str) -> str:
         """
-        Rewrite user query for better retrieval using LLM.
+        Rewrite user query for better retrieval.
         
         Args:
             query: Original user query.
             
         Returns:
-            Tuple of (rewritten_query, conversation_history).
+            Rewritten query string.
         """
         system_message = SystemMessage(content=QUERY_REWRITER_PROMPT)
         human_message = HumanMessage(content=query)
         response = self.llm.invoke([system_message, human_message])
-
-        rewritten_query = response.content
-        conversation_history = [
-            HumanMessage(content=query),
-            AIMessage(content=rewritten_query),
-        ]
-
-        return rewritten_query, conversation_history
+        return response.content
 
     def retrieve_documents(self, query: str) -> list[Document]:
         """
@@ -176,7 +169,6 @@ class RAGService:
         """
         try:
             with self.database.session_scope() as session:
-                # Serialize messages for storage
                 serialized = [str(msg) for msg in messages]
                 serialized.append(f"Assistant: {response}")
                 full_conversation = "\n".join(serialized)
@@ -187,38 +179,3 @@ class RAGService:
         except Exception as e:
             logger.error(f"Error saving conversation: {e}")
             raise
-
-    def run(self, query: str, session_id: str) -> dict:
-        """
-        Execute the complete RAG pipeline.
-        
-        Args:
-            query: User query.
-            session_id: User session identifier.
-            
-        Returns:
-            Dictionary containing the response and intermediate results.
-        """
-        logger.info(f"Processing query for session {session_id}")
-
-        # Step 1: Rewrite query
-        rewritten_query, conversation_history = self.rewrite_query(query)
-
-        # Step 2: Retrieve documents
-        documents = self.retrieve_documents(rewritten_query)
-
-        # Step 3: Generate context summary
-        context_summary = self.generate_context_summary(session_id)
-
-        # Step 4: Generate response
-        response = self.generate_response(rewritten_query, documents, context_summary)
-
-        # Step 5: Save conversation
-        self.save_conversation(session_id, conversation_history, response)
-
-        return {
-            "response": response,
-            "rewritten_query": rewritten_query,
-            "documents_retrieved": len(documents),
-            "session_id": session_id,
-        }

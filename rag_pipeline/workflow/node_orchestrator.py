@@ -7,6 +7,7 @@ individual steps of the RAG pipeline.
 
 from rag_pipeline.workflow.state import AgentState
 from rag_pipeline.workflow.service import RAGService
+from langchain_core.messages import HumanMessage, AIMessage
 
 
 class Nodes:
@@ -35,8 +36,16 @@ class Nodes:
         Returns:
             Updated state with rewritten_query and conversation_history.
         """
+        
         query = state["query"]
-        rewritten_query, conversation_history = self.service.rewrite_query(query)
+        rewritten_query = self.service.rewrite_query(query)
+        
+        # Build conversation history
+        conversation_history = [
+            HumanMessage(content=query),
+            AIMessage(content=rewritten_query),
+        ]
+        
         return {
             "rewritten_query": rewritten_query,
             "conversation_history": conversation_history,
