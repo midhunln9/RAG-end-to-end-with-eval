@@ -1,3 +1,9 @@
+"""
+RAG augmentation prompt.
+
+System prompt for generating final responses using retrieval-augmented generation.
+"""
+
 AUGMENT_QUERY_AND_RAG_PROMPT = """
 You are a helpful assistant for Financial Compliance. You will be provided with:
 - a user query

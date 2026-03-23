@@ -1,4 +1,10 @@
-SUMMARY_SO_FAR="""
+"""
+Conversation summary prompt.
+
+System prompt for generating context summaries from conversation history.
+"""
+
+SUMMARY_SO_FAR = """
 You are a helpful assistant that summarizes the conversation history so far.
 Output only the summary of the conversation history so far.
 Do not include any other text in your response. Refer below example to understand the format of the summary.

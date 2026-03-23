@@ -1,5 +1,10 @@
+"""LLM configuration."""
+
 from dataclasses import dataclass
+
 
 @dataclass
 class LLMConfig:
-    model_name : str = "llama3.2"
+    """Language model configuration."""
+
+    model_name: str = "llama3.2"

@@ -1,3 +1,9 @@
+"""
+Query rewriter prompt.
+
+System prompt for rewriting user queries for better retrieval.
+"""
+
 QUERY_REWRITER_PROMPT = """
 You are a query rewriting assistant for Financial Compliance.
 

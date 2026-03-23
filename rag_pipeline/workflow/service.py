@@ -1,0 +1,224 @@
+"""
+RAG (Retrieval-Augmented Generation) service layer.
+
+Orchestrates the complete RAG workflow including query rewriting, document retrieval,
+context summarization, and response generation.
+"""
+
+import logging
+from typing import Optional
+
+from langchain_core.documents import Document
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+
+from rag_pipeline.workflow.database.db_repositories.conversation_repository import (
+    ConversationRepository,
+)
+from rag_pipeline.workflow.database.sessions import Database
+from rag_pipeline.workflow.prompts.augment_query_rag import AUGMENT_QUERY_AND_RAG_PROMPT
+from rag_pipeline.workflow.prompts.query_rewriter import QUERY_REWRITER_PROMPT
+from rag_pipeline.workflow.prompts.summary_so_far import SUMMARY_SO_FAR
+from rag_pipeline.workflow.protocols.llm_protocol import LLMProtocol
+from rag_pipeline.workflow.protocols.vector_db_protocol import VectorDBProtocol
+
+logger = logging.getLogger(__name__)
+
+
+class RAGService:
+    """
+    Orchestrates the complete RAG pipeline.
+    
+    Handles query rewriting, document retrieval, conversation context,
+    and response generation.
+    """
+
+    def __init__(
+        self,
+        database: Database,
+        vector_db: VectorDBProtocol,
+        conversation_repository: ConversationRepository,
+        llm: LLMProtocol,
+    ):
+        """
+        Initialize RAG service with required dependencies.
+        
+        Args:
+            database: Database connection manager.
+            vector_db: Vector store for document retrieval.
+            conversation_repository: Repository for storing conversation history.
+            llm: Language model for query rewriting and response generation.
+        """
+        self.database = database
+        self.vector_db = vector_db
+        self.conversation_repository = conversation_repository
+        self.llm = llm
+
+    def rewrite_query(self, query: str) -> tuple[str, list[BaseMessage]]:
+        """
+        Rewrite user query for better retrieval using LLM.
+        
+        Args:
+            query: Original user query.
+            
+        Returns:
+            Tuple of (rewritten_query, conversation_history).
+        """
+        system_message = SystemMessage(content=QUERY_REWRITER_PROMPT)
+        human_message = HumanMessage(content=query)
+        response = self.llm.invoke([system_message, human_message])
+
+        rewritten_query = response.content
+        conversation_history = [
+            HumanMessage(content=query),
+            AIMessage(content=rewritten_query),
+        ]
+
+        return rewritten_query, conversation_history
+
+    def retrieve_documents(self, query: str) -> list[Document]:
+        """
+        Retrieve relevant documents from vector store.
+        
+        Args:
+            query: The query to search for.
+            
+        Returns:
+            List of retrieved documents.
+        """
+        try:
+            documents = self.vector_db.query(query)
+            logger.info(f"Retrieved {len(documents)} documents for query")
+            return documents
+        except Exception as e:
+            logger.error(f"Error retrieving documents: {e}")
+            return []
+
+    def generate_context_summary(self, session_id: str) -> str:
+        """
+        Generate a summary of recent conversation history for context.
+        
+        Args:
+            session_id: User session identifier.
+            
+        Returns:
+            Summary of past conversations or default message if none available.
+        """
+        try:
+            with self.database.session_scope() as session:
+                past_conversations = (
+                    self.conversation_repository.get_conversations_by_session_id(
+                        session, session_id
+                    )
+                )
+
+                # If more than 5 conversations, summarize the last 5
+                if len(past_conversations) > 5:
+                    recent = past_conversations[-5:]
+                    summary_prompt = SystemMessage(content=SUMMARY_SO_FAR)
+                    history_message = HumanMessage(content=str(recent))
+                    summary = self.llm.invoke([summary_prompt, history_message])
+                    return summary.content
+                else:
+                    return "No past conversation summary available."
+        except Exception as e:
+            logger.warning(f"Error generating context summary: {e}")
+            return "No past conversation summary available."
+
+    def generate_response(
+        self,
+        query: str,
+        documents: list[Document],
+        context_summary: str,
+    ) -> str:
+        """
+        Generate final RAG response using retrieved documents and context.
+        
+        Args:
+            query: The rewritten query.
+            documents: Retrieved documents.
+            context_summary: Summary of past conversations.
+            
+        Returns:
+            Generated response from LLM.
+        """
+        # Format documents into readable text
+        docs_text = (
+            "\n".join(
+                [
+                    f"Document: {doc.page_content}\nMetadata: {doc.metadata}"
+                    for doc in documents
+                ]
+            )
+            if documents
+            else "No documents retrieved"
+        )
+
+        system_message = SystemMessage(content=AUGMENT_QUERY_AND_RAG_PROMPT)
+        query_message = HumanMessage(content=query)
+        context_message = HumanMessage(content=context_summary)
+        docs_message = HumanMessage(content=docs_text)
+
+        response = self.llm.invoke(
+            [system_message, query_message, context_message, docs_message]
+        )
+        return response.content
+
+    def save_conversation(
+        self, session_id: str, messages: list[BaseMessage], response: str
+    ) -> None:
+        """
+        Save conversation to database.
+        
+        Args:
+            session_id: User session identifier.
+            messages: List of messages in the conversation.
+            response: The final response from the LLM.
+        """
+        try:
+            with self.database.session_scope() as session:
+                # Serialize messages for storage
+                serialized = [str(msg) for msg in messages]
+                serialized.append(f"Assistant: {response}")
+                full_conversation = "\n".join(serialized)
+                self.conversation_repository.add_conversation(
+                    session, session_id, full_conversation
+                )
+            logger.info(f"Saved conversation for session {session_id}")
+        except Exception as e:
+            logger.error(f"Error saving conversation: {e}")
+            raise
+
+    def run(self, query: str, session_id: str) -> dict:
+        """
+        Execute the complete RAG pipeline.
+        
+        Args:
+            query: User query.
+            session_id: User session identifier.
+            
+        Returns:
+            Dictionary containing the response and intermediate results.
+        """
+        logger.info(f"Processing query for session {session_id}")
+
+        # Step 1: Rewrite query
+        rewritten_query, conversation_history = self.rewrite_query(query)
+
+        # Step 2: Retrieve documents
+        documents = self.retrieve_documents(rewritten_query)
+
+        # Step 3: Generate context summary
+        context_summary = self.generate_context_summary(session_id)
+
+        # Step 4: Generate response
+        response = self.generate_response(rewritten_query, documents, context_summary)
+
+        # Step 5: Save conversation
+        self.save_conversation(session_id, conversation_history, response)
+
+        return {
+            "response": response,
+            "rewritten_query": rewritten_query,
+            "documents_retrieved": len(documents),
+            "session_id": session_id,
+        }
