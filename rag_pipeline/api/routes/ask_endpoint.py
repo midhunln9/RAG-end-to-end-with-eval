@@ -63,6 +63,7 @@ def ask(request: Request, ask_request: AskRequest) -> AskResponse:
         HTTPException: If processing fails.
     """
     if not hasattr(request.app.state, 'workflow'):
+        logger.error("Workflow not initialized - missing request.app.state.workflow")
         raise HTTPException(status_code=500, detail="Workflow not initialized")
     
     try:
@@ -103,5 +104,12 @@ def ask(request: Request, ask_request: AskRequest) -> AskResponse:
             sources=sources,
         )
     except Exception as e:
-        logger.error(f"Error processing query: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error processing query")
+        error_type = type(e).__name__
+        logger.error(
+            f"Error processing query: {error_type}: {str(e)}",
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing query: {error_type}: {str(e)}"
+        )

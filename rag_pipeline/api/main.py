@@ -5,6 +5,7 @@ Uses async context manager for dependency initialization and lifecycle managemen
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -28,7 +29,8 @@ from rag_pipeline.workflow.database.db_repositories.conversation_repository impo
 from rag_pipeline.workflow.configs.pinecone_config import PineconeConfig
 from rag_pipeline.workflow.configs.llm_config import LLMConfig
 from rag_pipeline.api.routes import ask_endpoint
-
+from rag_pipeline.workflow.llms.openai import OpenAILLM
+from rag_pipeline.workflow.embeddings.openai_embedding import OpenAIEmbedding
 from dotenv import load_dotenv
 load_dotenv("/Users/midhunln/Documents/rag20march_with_eval/Ingestion_plus_Retriever_eval/ingestion.env")
 
@@ -40,12 +42,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def validate_dependencies() -> dict:
+    """
+    Validate that all required dependencies and API keys are available.
+    
+    Returns:
+        Dictionary with validation results and any error messages.
+    """
+    validation_results = {
+        "valid": True,
+        "errors": [],
+        "warnings": []
+    }
+    
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        validation_results["valid"] = False
+        validation_results["errors"].append("OPENAI_API_KEY not found in environment")
+    
+    settings = Settings()
+    if not settings.pinecone_api_key or settings.pinecone_api_key == "":
+        validation_results["valid"] = False
+        validation_results["errors"].append("PINECONE_API_KEY not configured in settings")
+    
+    if not settings.database_url:
+        validation_results["valid"] = False
+        validation_results["errors"].append("DATABASE_URL not configured")
+    
+    return validation_results
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan context manager for startup and shutdown.
     
     On startup:
+    - Validates all dependencies
     - Initializes all dependencies (database, embeddings, vector DB, LLM, service, workflow)
     - Stores them in app.state for access from route handlers
     
@@ -53,6 +86,18 @@ async def lifespan(app: FastAPI):
     - Cleans up resources
     """
     logger.info("Starting up RAG Pipeline API...")
+    
+    validation = validate_dependencies()
+    if not validation["valid"]:
+        for error in validation["errors"]:
+            logger.error(f"STARTUP VALIDATION ERROR: {error}")
+        logger.error("Startup failed due to missing dependencies")
+        raise RuntimeError(f"Startup validation failed: {'; '.join(validation['errors'])}")
+    
+    for warning in validation["warnings"]:
+        logger.warning(f"STARTUP WARNING: {warning}")
+    
+    logger.info("All dependencies validated successfully")
     
     # Initialize settings
     settings = Settings()
@@ -64,19 +109,15 @@ async def lifespan(app: FastAPI):
     app.state.database = database
     logger.info("Database initialized")
 
-    # Embeddings configuration
-    pinecone_config = PineconeConfig(
-        index_name=settings.pinecone_index_name,
-        metric=settings.pinecone_metric,
-        batch_size=settings.pinecone_batch_size,
-        dense_embedding_model_name=settings.pinecone_dense_embedding_model,
-        sparse_embedding_model_name=settings.pinecone_sparse_embedding_model,
-        cloud=settings.pinecone_cloud,
-        region=settings.pinecone_region,
-    )
+    # Embeddings configuration - use settings to ensure alignment
+    pinecone_config = PineconeConfig.from_settings(settings)
+    logger.info(f"Pinecone config: index={pinecone_config.index_name}, metric={pinecone_config.metric}")
 
     # Embedding strategies
+    """
     dense_embedding = SentenceTransformerEmbedding(pinecone_config)
+    """
+    dense_embedding = OpenAIEmbedding()
     sparse_embedding = SentenceTransformerSparseEmbedding(pinecone_config)
     app.state.dense_embedding = dense_embedding
     app.state.sparse_embedding = sparse_embedding
@@ -94,8 +135,11 @@ async def lifespan(app: FastAPI):
     logger.info("Vector database initialized")
 
     # LLM
-    llm_config = LLMConfig(model_name=settings.llm_model_name)
+    llm_config = LLMConfig(model_name=settings.llm_model_name, openai_model_name=settings.openai_model_name)
+    """
     llm = OllamaLLM(llm_config)
+    """
+    llm = OpenAILLM(llm_config)
     app.state.llm = llm
     logger.info("LLM initialized")
 
@@ -158,3 +202,43 @@ def health(request: Request):
         "environment": request.app.state.settings.environment,
     }
 
+
+@app.get("/health/dependencies", tags=["Health"])
+def health_dependencies(request: Request):
+    """
+    Check the status of all dependencies.
+    
+    Returns diagnostics about API keys, database, Pinecone, and other critical components.
+    """
+    try:
+        settings = request.app.state.settings
+        
+        diagnostics = {
+            "status": "healthy",
+            "dependencies": {
+                "database": {
+                    "configured": bool(settings.database_url),
+                    "url": settings.database_url.replace("@", "@***") if settings.database_url else "NOT SET"
+                },
+                "openai": {
+                    "api_key_set": bool(os.getenv("OPENAI_API_KEY")),
+                    "model": settings.openai_model_name
+                },
+                "pinecone": {
+                    "api_key_set": bool(settings.pinecone_api_key),
+                    "index_name": settings.pinecone_index_name,
+                    "environment": settings.pinecone_environment
+                },
+                "workflow": {
+                    "initialized": hasattr(request.app.state, 'workflow')
+                }
+            }
+        }
+        
+        return diagnostics
+    except Exception as e:
+        logger.error(f"Error checking dependencies: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Failed to check dependencies: {str(e)}"
+        }

@@ -63,10 +63,15 @@ class RAGService:
         Returns:
             Rewritten query string.
         """
-        system_message = SystemMessage(content=QUERY_REWRITER_PROMPT)
-        human_message = HumanMessage(content=query)
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        try:
+            system_message = SystemMessage(content=QUERY_REWRITER_PROMPT)
+            human_message = HumanMessage(content=query)
+            response = self.llm.invoke([system_message, human_message])
+            return response.content
+        except Exception as e:
+            error_msg = f"Query rewriting failed: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
 
     def retrieve_documents(self, query: str) -> list[Document]:
         """
@@ -83,7 +88,8 @@ class RAGService:
             logger.info(f"Retrieved {len(documents)} documents for query")
             return documents
         except Exception as e:
-            logger.error(f"Error retrieving documents: {e}")
+            error_msg = f"Document retrieval failed: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             return []
 
     def generate_context_summary(self, session_id: str) -> str:
@@ -104,7 +110,6 @@ class RAGService:
                     )
                 )
 
-                # If more than 5 conversations, summarize the last 5
                 if len(past_conversations) > 5:
                     recent = past_conversations[-5:]
                     summary_prompt = SystemMessage(content=SUMMARY_SO_FAR)
@@ -114,7 +119,8 @@ class RAGService:
                 else:
                     return "No past conversation summary available."
         except Exception as e:
-            logger.warning(f"Error generating context summary: {e}")
+            error_msg = f"Context summary generation failed: {type(e).__name__}: {str(e)}"
+            logger.warning(error_msg, exc_info=True)
             return "No past conversation summary available."
 
     def generate_response(
@@ -135,7 +141,6 @@ class RAGService:
             Generated response from LLM.
         """
         try:
-            # Format documents into readable text
             docs_text = (
                 "\n".join(
                     [
@@ -147,7 +152,6 @@ class RAGService:
                 else "No documents retrieved"
             )
 
-            # Format the user prompt with actual values
             formatted_user_prompt = RAG_USER_PROMPT.format(
                 query=query,
                 summary=context_summary,
@@ -157,12 +161,10 @@ class RAGService:
             logger.debug(f"Formatted user prompt length: {len(formatted_user_prompt)} characters")
             logger.debug(f"Formatted user prompt preview: {formatted_user_prompt[:500]}...")
 
-            # Create system and user messages (pattern matches rewrite_query and generate_context_summary)
             system_message = SystemMessage(content=RAG_SYSTEM_PROMPT)
             user_message = HumanMessage(content=formatted_user_prompt)
             logger.debug("System and user messages created successfully")
 
-            # Invoke LLM with both system and user messages
             response = self.llm.invoke([system_message, user_message])
             logger.debug(f"LLM response type: {type(response)}")
             logger.debug(f"LLM response object: {response}")
@@ -177,8 +179,9 @@ class RAGService:
                 return str(response)
                 
         except Exception as e:
-            logger.error(f"Error in generate_response: {e}", exc_info=True)
-            raise
+            error_msg = f"Response generation failed: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
 
     def save_conversation(
         self, session_id: str, messages: list[BaseMessage], response: str
@@ -201,5 +204,6 @@ class RAGService:
                 )
             logger.info(f"Saved conversation for session {session_id}")
         except Exception as e:
-            logger.error(f"Error saving conversation: {e}")
-            raise
+            error_msg = f"Failed to save conversation for session {session_id}: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
