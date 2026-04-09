@@ -22,6 +22,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from logger import setup_logging
 from dotenv import load_dotenv, find_dotenv
 
+from src.openai_embedding import OpenAIEmbedding
+
 
 def main():
     """
@@ -68,7 +70,11 @@ def main():
 
     logger.info("Initializing Pinecone configuration and embedding strategies")
     pinecone_config = PineconeConfig()
+    """
     dense_embedding_strategy = SentenceTransformerEmbedding(pinecone_config)
+    """
+    dense_embedding_strategy = OpenAIEmbedding(pinecone_config)
+    
     sparse_embedding_strategy = SentenceTransformerSparseEmbedding(pinecone_config)
 
     logger.info("Initializing Pinecone repository")

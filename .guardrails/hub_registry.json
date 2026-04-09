@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "validators": {
+    "guardrails/gibberish_text": {
+      "import_path": "guardrails_grhub_gibberish_text",
+      "exports": [
+        "GibberishText"
+      ],
+      "installed_at": "2026-04-07T07:56:06.007448+00:00",
+      "package_name": "guardrails-grhub-gibberish-text"
+    }
+  }
+}

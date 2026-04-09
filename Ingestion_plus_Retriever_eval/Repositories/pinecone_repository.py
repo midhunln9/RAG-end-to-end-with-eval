@@ -109,9 +109,13 @@ class PineconeRepository(VectorDBProtocol):
                 dfs.append(row)
         
         # Write accumulated evaluation dataset after all batches are processed
+
+        # Used to collect all the chunks stored in the vector db, later we can 
+        # take a sample and use it to create query appropriate for those datasets 
+        # adn run hard metrics eval on them
         self.logger.info(f"Creating evaluation dataset with {len(dfs)} records")
         final_eval_df = pd.DataFrame(dfs)
-        final_eval_df.to_csv("evaluation_dataset.csv", index = False)
+        final_eval_df.to_csv("notebooks/datasets/openai_small/all_chunks.csv", index = False)
         self.logger.info("Evaluation dataset saved to evaluation_dataset.csv")
 
     def query_vector_store_for_rankx(self, query: str) -> List[Dict]:

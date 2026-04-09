@@ -6,6 +6,7 @@ Consolidates all environment-based settings using Pydantic for validation.
 
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -20,9 +21,10 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     llm_model_name: str = "llama3.2"
+    openai_model_name: str = "gpt-4o-mini"
     
     # Pinecone Configuration
-    pinecone_index_name: str = "final-rag-index"
+    pinecone_index_name: str = "final-rag-index-openai-small"
     pinecone_metric: str = "dotproduct"
     pinecone_batch_size: int = 200
     pinecone_dense_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -37,12 +39,6 @@ class Settings(BaseSettings):
     # Application Configuration
     log_level: str = "INFO"
     environment: str = "development"
-    
-    class Config:
-        """Pydantic config."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
 
 def get_settings() -> Settings:

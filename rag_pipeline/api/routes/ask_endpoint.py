@@ -104,12 +104,11 @@ def ask(request: Request, ask_request: AskRequest) -> AskResponse:
             sources=sources,
         )
     except Exception as e:
-        error_type = type(e).__name__
         logger.error(
-            f"Error processing query: {error_type}: {str(e)}",
+            f"Error processing query: {str(e)}",
             exc_info=True
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing query: {error_type}: {str(e)}"
+            detail=f"Error processing query: {str(e)}"
         )

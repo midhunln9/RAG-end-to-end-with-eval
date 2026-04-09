@@ -31,8 +31,11 @@ from rag_pipeline.workflow.configs.llm_config import LLMConfig
 from rag_pipeline.api.routes import ask_endpoint
 from rag_pipeline.workflow.llms.openai import OpenAILLM
 from rag_pipeline.workflow.embeddings.openai_embedding import OpenAIEmbedding
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+"""
 load_dotenv("/Users/midhunln/Documents/rag20march_with_eval/Ingestion_plus_Retriever_eval/ingestion.env")
+"""
+load_dotenv(find_dotenv())
 
 # Configure logging
 logging.basicConfig(
@@ -184,61 +187,10 @@ app = FastAPI(
 app.include_router(ask_endpoint.router)
 
 
-@app.get("/", tags=["Health"])
-def root():
+@app.get("/")
+def health():
     """Health check endpoint."""
     return {
         "message": "RAG Pipeline API is running",
         "status": "healthy",
     }
-
-
-@app.get("/health", tags=["Health"])
-def health(request: Request):
-    """Detailed health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "rag_pipeline",
-        "environment": request.app.state.settings.environment,
-    }
-
-
-@app.get("/health/dependencies", tags=["Health"])
-def health_dependencies(request: Request):
-    """
-    Check the status of all dependencies.
-    
-    Returns diagnostics about API keys, database, Pinecone, and other critical components.
-    """
-    try:
-        settings = request.app.state.settings
-        
-        diagnostics = {
-            "status": "healthy",
-            "dependencies": {
-                "database": {
-                    "configured": bool(settings.database_url),
-                    "url": settings.database_url.replace("@", "@***") if settings.database_url else "NOT SET"
-                },
-                "openai": {
-                    "api_key_set": bool(os.getenv("OPENAI_API_KEY")),
-                    "model": settings.openai_model_name
-                },
-                "pinecone": {
-                    "api_key_set": bool(settings.pinecone_api_key),
-                    "index_name": settings.pinecone_index_name,
-                    "environment": settings.pinecone_environment
-                },
-                "workflow": {
-                    "initialized": hasattr(request.app.state, 'workflow')
-                }
-            }
-        }
-        
-        return diagnostics
-    except Exception as e:
-        logger.error(f"Error checking dependencies: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "message": f"Failed to check dependencies: {str(e)}"
-        }

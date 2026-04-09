@@ -1,41 +1,39 @@
 """
-Ollama LLM implementation.
+OpenAI LLM implementation.
 
-Provides integration with Ollama for local LLM inference.
+Provides integration with OpenAI for hosted LLM inference.
 """
 
-from typing import List
-
 from langchain_core.messages import BaseMessage
-from langchain_ollama import ChatOllama
-
+from langchain_openai import ChatOpenAI
+import os
 from rag_pipeline.workflow.configs.llm_config import LLMConfig
 from rag_pipeline.workflow.protocols.llm_protocol import LLMProtocol
 
 
-class OllamaLLM(LLMProtocol):
+class OpenAILLM(LLMProtocol):
     """
-    LLM adapter for Ollama local inference.
-    
-    Wraps LangChain's ChatOllama for use with the RAG pipeline.
+    LLM adapter for OpenAI hosted inference.
+
+    Wraps LangChain's ChatOpenAI for use with the RAG pipeline.
     """
 
     def __init__(self, config: LLMConfig):
         """
-        Initialize Ollama LLM.
-        
+        Initialize OpenAI LLM.
+
         Args:
             config: LLM configuration containing model name.
         """
-        self.model = ChatOllama(model=config.model_name)
+        self.model = ChatOpenAI(model=config.openai_model_name, api_key=os.getenv("OPENAI_API_KEY"))
 
     def invoke(self, messages: list[BaseMessage]) -> BaseMessage:
         """
         Invoke the LLM with a list of messages.
-        
+
         Args:
             messages: List of messages to send to the LLM.
-            
+
         Returns:
             LLM response as a BaseMessage.
         """

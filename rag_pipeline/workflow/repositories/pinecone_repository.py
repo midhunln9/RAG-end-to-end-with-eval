@@ -80,7 +80,7 @@ class PineconeRepository(VectorDBProtocol):
 
         # Convert results to Document objects
         documents = [
-            Document(page_content=match.id, metadata=match.metadata or {})
+            Document(page_content=match.metadata.get("text", match.id), metadata=match.metadata or {})
             for match in results.matches
         ]
         return documents
